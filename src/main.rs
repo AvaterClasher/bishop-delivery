@@ -1,15 +1,29 @@
+use lazy_static::lazy_static;
 use rocket::http::Status;
+use rocket::launch;
 use rocket::request::{self, FromRequest, Request};
 use rocket::serde::json::{Json, Value as JsonValue};
 use rocket::{get, post, routes};
 use serde::Deserialize;
 use serde_json::json;
-use rocket::launch;
+use std::collections::HashMap;
+use std::sync::Mutex;
 
 #[derive(Debug, Deserialize)]
 struct DeliveryRequest {
     destination: String,
     speed: String,
+}
+
+#[derive(Debug)]
+struct PackageInfo {
+    destination: String,
+    current_location: String,
+    speed: String,
+}
+
+lazy_static! {
+    static ref PACKAGES: Mutex<HashMap<String, PackageInfo>> = Mutex::new(HashMap::new());
 }
 
 pub struct InterstellarToken;
@@ -19,7 +33,6 @@ impl<'r> FromRequest<'r> for InterstellarToken {
     type Error = ();
 
     async fn from_request(request: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
-        // Check if the custom header X-Interstellar-Token is present in the request
         if request.headers().contains("X-Interstellar-Token") {
             request::Outcome::Success(InterstellarToken)
         } else {
@@ -30,9 +43,20 @@ impl<'r> FromRequest<'r> for InterstellarToken {
 
 #[post("/deliver", data = "<delivery_request>")]
 fn deliver(delivery_request: Json<DeliveryRequest>, _token: InterstellarToken) -> Json<JsonValue> {
-    // Simulate package journey
     let package_id = generate_package_id();
     let journey_status = simulate_journey(&delivery_request.destination, &delivery_request.speed);
+
+    let package_info = PackageInfo {
+        destination: delivery_request.destination.clone(),
+        current_location: "Earth".to_string(),
+        speed: delivery_request.speed.clone(),
+    };
+
+    PACKAGES
+        .lock()
+        .unwrap()
+        .insert(package_id.clone(), package_info);
+
     let response_data = json!({
         "package_id": package_id,
         "status": journey_status,
@@ -42,24 +66,74 @@ fn deliver(delivery_request: Json<DeliveryRequest>, _token: InterstellarToken) -
 
 #[get("/track/<package_id>")]
 fn track(package_id: String, _token: InterstellarToken) -> Json<JsonValue> {
-    // Retrieve package tracking information (simulate)
-    let tracking_info = retrieve_tracking_info(&package_id);
-    let response_data = json!({
-        "package_id": package_id,
-        "tracking_info": tracking_info,
-        "destination": "Earth",
-    });
-    Json(response_data)
+    let packages = PACKAGES.lock().unwrap();
+    if let Some(package_info) = packages.get(&package_id) {
+        let response_data = json!({
+            "package_id": package_id,
+            "destination": package_info.destination,
+            "current_location": package_info.current_location,
+            "speed": package_info.speed,
+            "tracking_info": format!("Package is currently at {} en route to {}", package_info.current_location, package_info.destination),
+        });
+        Json(response_data)
+    } else {
+        Json(json!({"error": "Package ID not found"}))
+    }
+}
+
+#[get("/packages/destination/<destination>")]
+fn packages_by_destination(destination: String, _token: InterstellarToken) -> Json<JsonValue> {
+    let packages = PACKAGES.lock().unwrap();
+    let filtered_packages: Vec<_> = packages
+        .iter()
+        .filter(|(_, info)| info.destination == destination)
+        .map(|(id, info)| {
+            json!({
+                "package_id": id,
+                "destination": info.destination,
+                "current_location": info.current_location,
+                "speed": info.speed,
+            })
+        })
+        .collect();
+
+    Json(json!({ "packages": filtered_packages }))
+}
+
+// List all packages by speed
+#[get("/packages/speed/<speed>")]
+fn packages_by_speed(speed: String, _token: InterstellarToken) -> Json<JsonValue> {
+    let packages = PACKAGES.lock().unwrap();
+    let filtered_packages: Vec<_> = packages
+        .iter()
+        .filter(|(_, info)| info.speed == speed)
+        .map(|(id, info)| {
+            json!({
+                "package_id": id,
+                "destination": info.destination,
+                "current_location": info.current_location,
+                "speed": info.speed,
+            })
+        })
+        .collect();
+
+    Json(json!({ "packages": filtered_packages }))
+}
+
+// Get package count
+#[get("/packages/count")]
+fn package_count(_token: InterstellarToken) -> Json<JsonValue> {
+    let packages = PACKAGES.lock().unwrap();
+    let count = packages.len();
+    
+    Json(json!({ "package_count": count }))
 }
 
 fn generate_package_id() -> String {
-    // Generate a unique package ID (for simulation)
-    // You can use any logic here to generate IDs
-    // For simplicity, we'll just generate a random ID
     use rand::distributions::Alphanumeric;
     use rand::{thread_rng, Rng};
 
-    let mut rng = thread_rng();
+    let rng = thread_rng();
     let package_id: String = rng
         .sample_iter(&Alphanumeric)
         .take(10)
@@ -69,23 +143,13 @@ fn generate_package_id() -> String {
 }
 
 fn simulate_journey(destination: &str, speed: &str) -> String {
-    // Simulate package journey (for demonstration)
-    // This function can include complex logic to simulate
-    // the time it takes for delivery based on destination
-    // and speed selected by the user
-    // For simplicity, we'll return a fixed message
-    format!("Package en route to {}", destination)
-}
-
-fn retrieve_tracking_info(package_id: &str) -> String {
-    // Retrieve tracking information (for simulation)
-    // This function could interact with a database or
-    // external API to fetch real tracking information
-    // For simplicity, we'll return a fixed message
-    format!("Tracking information for package {}", package_id)
+    format!("Package en route to {} with {}", destination, speed)
 }
 
 #[launch]
 fn rocket() -> _ {
-    rocket::build().mount("/", routes![deliver, track])
+    rocket::build().mount(
+        "/",
+        routes![deliver, track, packages_by_destination, packages_by_speed, package_count],
+    )
 }
