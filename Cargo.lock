@@ -102,6 +102,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "383d29d513d8764dcdc42ea295d979eb99c3c9f00607b3692cf68a431f7dca72"
 
 [[package]]
+name = "bishop-delivery"
+version = "0.1.0"
+dependencies = [
+ "lazy_static",
+ "rand",
+ "rocket",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "bitflags"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -447,17 +458,6 @@ name = "inlinable_string"
 version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8fae54786f62fb2918dcfae3d568594e50eb9b5c25bf04371af6fe7516452fb"
-
-[[package]]
-name = "interstellar-delivery"
-version = "0.1.0"
-dependencies = [
- "lazy_static",
- "rand",
- "rocket",
- "serde",
- "serde_json",
-]
 
 [[package]]
 name = "is-terminal"

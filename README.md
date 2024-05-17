@@ -125,8 +125,8 @@ Get the total count of all packages.
 1. **Clone the repository**:
 
     ```sh
-    git clone https://github.com/AvaterClasher/interstellar-delivery.git
-    cd interstellar-delivery
+    git clone https://github.com/AvaterClasher/bishop-delivery.git
+    cd bishop-delivery
     ```
 
 2. **Install dependencies**:
